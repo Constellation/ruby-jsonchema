@@ -1,6 +1,6 @@
 = Ruby/jsonschema
 
-* http://github.com/Constellation/jsonschema
+* http://github.com/Constellation/jsonchema
 
 == DESCRIPTION:
 
@@ -38,8 +38,8 @@ if you have json library
 
 == INSTALL:
 
-  gem source -a http://gems.github.com
-  sudo gem install Constellation-jsonschema
+  gem source -a http://gemcutter.org
+  sudo gem install jsonschema
 
 == LICENSE:
 
