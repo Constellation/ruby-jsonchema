@@ -20,7 +20,7 @@ $github_name = 'ruby-jsonschema'
 $summary = 'json schema library ruby porting from http://code.google.com/p/jsonschema/'
 $author = 'Constellation'
 $email = 'utatane.tea@gmail.com'
-$page = 'http://github.com/Constellation/jsonschema/tree/master'
+$page = 'http://github.com/Constellation/ruby-jsonchema/tree/master'
 #$exec = %W(jsonschema)
 $rubyforge_project = 'jsonschema'
 
