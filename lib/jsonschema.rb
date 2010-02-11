@@ -1,5 +1,5 @@
 # vim: fileencoding=utf-8
-require 'pp'
+
 module JSON
   class Schema
     VERSION = '2.0.0'
