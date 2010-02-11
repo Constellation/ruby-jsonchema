@@ -1,88 +1,240 @@
 # vim: fileencoding=utf-8
-
+require 'pp'
 module JSON
   class Schema
-    VERSION = '1.0.0'
+    VERSION = '2.0.0'
     class ValueError < Exception;end
+    class Undefined;end
     TypesMap = {
       "string"  => String,
-      "integer" => Integer,
-      "number"  => [Integer, Float],
+      "integer" => [Integer, Fixnum],
+      "number"  => [Integer, Float, Fixnum, Numeric],
       "boolean" => [TrueClass, FalseClass],
       "object"  => Hash,
       "array"   => Array,
       "null"    => NilClass,
       "any"     => nil
     }
-    TypesList = [String, Integer, Float, TrueClass, FalseClass, Hash, Array, NilClass]
-    DefaultSchema = {
-      "id"                    => nil,
-      "type"                  => nil,
-      "properties"            => nil,
-      "items"                 => nil,
-      "optional"              => false,
-      "additionalProperties" => nil,
-      "requires"              => nil,
-      "identity"              => nil,
-      "minimum"               => nil,
-      "maximum"               => nil,
-      "minItems"             => nil,
-      "maxItems"             => nil,
-      "pattern"               => nil,
-      "maxLength"            => nil,
-      "minLength"            => nil,
-      "enum"                  => nil,
-      "options"               => nil,
-      "readonly"              => nil,
-      "title"                 => nil,
-      "description"           => nil,
-      "format"                => nil,
-      "default"               => nil,
-      "transient"             => nil,
-      "maxDecimal"           => nil,
-      "hidden"                => nil,
-      "disallow"              => nil,
-      "extends"               => nil
-    }
-    def initialize interactive=true
+    TypesList = [String, Integer, Float, Fixnum, Numeric, TrueClass, FalseClass, Hash, Array, NilClass]
+    def initialize interactive
       @interactive = interactive
       @refmap = {}
     end
 
-    def validate data, schema
-      @refmap = {
-        '$' => schema
-      }
-      _validate(data, schema)
-    end
+    def check_property value, schema, key, parent
+      if schema
+#        if @interactive && schema['readonly']
+#          raise ValueError, "#{key} is a readonly field , it can not be changed"
+#        end
 
-    private
-    def validate_id x, fieldname, schema, id=nil
-      unless id.nil?
-        if id == '$'
-          raise ValueError, "Reference id for field '#{fieldname}' cannot equal '$'"
+        if schema['id']
+          @refmap[schema['id']] = schema
         end
-        @refmap[id] = schema
+
+        if schema['extends']
+          check_property(value, schema['extends'], key, parent)
+        end
+
+        if value == Undefined
+          unless schema['optional']
+            raise ValueError, "#{key} is missing and it is not optional"
+          end
+
+          # default
+          if @interactive && !parent.include?(key) && !schema['default'].nil?
+            unless schema["readonly"]
+              parent[key] = schema['default']
+            end
+          end
+        else
+
+          # type
+          if schema['type']
+            check_type(value, schema['type'], key, parent)
+          end
+
+          # disallow
+          if schema['disallow']
+            flag = true
+            begin
+              check_type(value, schema['disallow'], key, parent)
+            rescue ValueError
+              flag = false
+            end
+            raise ValueError, "disallowed value was matched" if flag
+          end
+
+          unless value.nil?
+            if value.instance_of? Array
+              if schema['items']
+                if schema['items'].instance_of?(Array)
+                  schema['items'].each_with_index {|val, index|
+                    check_property(undefined_check(value, index), schema['items'][index], index, value)
+                  }
+                  if schema.include?('additionalProperties')
+                    additional = schema['additionalProperties']
+                    if additional.instance_of?(FalseClass)
+                      if schema['items'].size < value.size
+                        raise ValueError, "There are more values in the array than are allowed by the items and additionalProperties restrictions."
+                      end
+                    else
+                      value.each_with_index {|val, index|
+                        check_property(undefined_check(value, index), schema['additionalProperties'], index, value)
+                      }
+                    end
+                  end
+                else
+                  value.each_with_index {|val, index|
+                    check_property(undefined_check(value, index), schema['items'], index, value)
+                  }
+                end
+              end
+              if schema['minItems'] && value.size < schema['minItems']
+                raise ValueError, "There must be a minimum of #{schema['minItems']} in the array"
+              end
+              if schema['maxItems'] && value.size > schema['maxItems']
+                raise ValueError, "There must be a maximum of #{schema['maxItems']} in the array"
+              end
+            elsif schema['properties']
+              check_object(value, schema['properties'], schema['additionalProperties'])
+            elsif schema.include?('additionalProperties')
+              additional = schema['additionalProperties']
+              unless additional.instance_of?(TrueClass)
+                if additional.instance_of?(Hash) || additional.instance_of?(FalseClass)
+                  properties = {}
+                  value.each {|k, val|
+                    if additional.instance_of?(FalseClass)
+                      raise ValueError, "Additional properties not defined by 'properties' are not allowed in field '#{k}'"
+                    else
+                      check_property(val, schema['additionalProperties'], k, value)
+                    end
+                  }
+                else
+                  raise ValueError, "additionalProperties schema definition for field '#{}' is not an object"
+                end
+              end
+            end
+
+            if value.instance_of?(String)
+              # pattern
+              if schema['pattern'] && !(value =~ Regexp.new(schema['pattern']))
+                raise ValueError, "does not match the regex pattern #{schema['pattern']}"
+              end
+
+              strlen = value.split(//).size
+              # maxLength
+              if schema['maxLength'] && strlen > schema['maxLength']
+                raise ValueError, "may only be #{schema['maxLength']} characters long"
+              end
+
+              # minLength
+              if schema['minLength'] && strlen < schema['minLength']
+                raise ValueError, "must be at least #{schema['minLength']} characters long"
+              end
+            end
+
+            if value.kind_of?(Numeric)
+
+              # minimum + minimumCanEqual
+              if schema['minimum']
+                minimumCanEqual = schema.fetch('minimumCanEqual', Undefined)
+                if minimumCanEqual == Undefined || minimumCanEqual
+                  if value < schema['minimum']
+                    raise ValueError, "must have a minimum value of #{schema['minimum']}"
+                  end
+                else
+                  if value <= schema['minimum']
+                    raise ValueError, "must have a minimum value of #{schema['minimum']}"
+                  end
+                end
+              end
+
+              # maximum + maximumCanEqual
+              if schema['maximum']
+                maximumCanEqual = schema.fetch('maximumCanEqual', Undefined)
+                if maximumCanEqual == Undefined || maximumCanEqual
+                  if value > schema['maximum']
+                    raise ValueError, "must have a maximum value of #{schema['maximum']}"
+                  end
+                else
+                  if value >= schema['maximum']
+                    raise ValueError, "must have a maximum value of #{schema['maximum']}"
+                  end
+                end
+              end
+
+              # maxDecimal
+              if schema['maxDecimal'] && schema['maxDecimal'].kind_of?(Numeric)
+                if value.to_s =~ /\.\d{#{schema['maxDecimal']+1},}/
+                  raise ValueError, "may only have #{schema['maxDecimal']} digits of decimal places"
+                end
+              end
+
+            end
+
+            # enum
+            if schema['enum']
+              unless(schema['enum'].detect{|enum| enum == value })
+                raise ValueError, "does not have a value in the enumeration #{schema['enum'].join(", ")}"
+              end
+            end
+
+            # description
+            if schema['description'] && !schema['description'].instance_of?(String)
+              raise ValueError, "The description for field '#{value}' must be a string"
+            end
+
+            # title
+            if schema['title'] && !schema['title'].instance_of?(String)
+              raise ValueError, "The title for field '#{value}' must be a string"
+            end
+
+            # format
+            if schema['format']
+            end
+
+          end
+        end
       end
-      return x
     end
 
-    def validate_type x, fieldname, schema, fieldtype=nil
-      converted_fieldtype = convert_type(fieldtype)
-      fieldexists = true
-      begin
-        val = x.fetch(fieldname)
-      rescue IndexError
-        fieldexists = false
-      ensure
-        val = x[fieldname]
+    def check_object value, object_type_def, additional
+      if object_type_def.instance_of? Hash
+        if !value.instance_of?(Hash) || value.instance_of?(Array)
+          raise ValueError, "an object is required"
+        end
+
+        object_type_def.each {|key, odef|
+          if key.index('__') != 0
+            check_property(undefined_check(value, key), odef, key, value)
+          end
+        }
       end
-      if converted_fieldtype && fieldexists
-        if converted_fieldtype.kind_of? Array
+      value.each {|key, val|
+        if key.index('__') != 0 && object_type_def && !object_type_def[key] && additional == false
+          raise ValueError, "#{value.class} The property #{key} is not defined in the schema and the schema does not allow additional properties"
+        end
+        requires = object_type_def && object_type_def[key] && object_type_def[key]['requires']
+        if requires && !value.include?(requires)
+          raise ValueError, "the presence of the property #{key} requires that #{requires} also be present"
+        end
+        if object_type_def && object_type_def.instance_of?(Hash) && !object_type_def.include?(key)
+          check_property(val, additional, key, value)
+        end
+        if !@interactive && val && val['$schema']
+          check_property(val, val['$schema'], key, value)
+        end
+      }
+    end
+
+    def check_type value, type, key, parent
+      converted_fieldtype = convert_type(type)
+      if converted_fieldtype
+        if converted_fieldtype.instance_of? Array
           datavalid = false
-          converted_fieldtype.each do |type|
+          converted_fieldtype.each do |t|
             begin
-              validate_type(x, fieldname, type, type)
+              check_type(value, t, key, parent)
               datavalid = true
               break
             rescue ValueError
@@ -90,288 +242,20 @@ module JSON
             end
           end
           unless datavalid
-            raise ValueError, "Value #{val} for field '#{fieldname}' is not of type #{fieldtype}"
+            raise ValueError, "#{value.class} value found, but a #{type} is required"
           end
-        elsif converted_fieldtype.kind_of? Hash
-          begin
-            __validate(fieldname, x, converted_fieldtype)
-          rescue ValueError => e
-            raise e
-          end
+        elsif converted_fieldtype.instance_of? Hash
+          check_property(value, type, key, parent)
         else
-          unless val.kind_of? converted_fieldtype
-            raise ValueError, "Value #{val} for field '#{fieldname}' is not of type #{fieldtype}"
+          unless value.instance_of? converted_fieldtype
+            raise ValueError, "#{value.class} value found, but a #{type} is required"
           end
         end
       end
-      return x
     end
 
-    def validate_properties x, fieldname, schema, properties=nil
-      if !properties.nil? && x[fieldname]
-        value = x[fieldname]
-        if value
-          if value.kind_of? Hash
-            if properties.kind_of? Hash
-              properties.each do |key, val|
-                __validate(key, value, val)
-              end
-            else
-              raise ValueError, "Properties definition of field '#{fieldname}' is not an object"
-            end
-          end
-        end
-      end
-      return x
-    end
-
-    def validate_items x, fieldname, schema, items=nil
-      if !items.nil? && x[fieldname]
-        value = x[fieldname]
-        unless value.nil?
-          if value.kind_of? Array
-            if items.kind_of? Array
-              if items.size == value.size
-                items.each_with_index do |item, index|
-                  begin
-                    validate(value[index], item)
-                  rescue ValueError => e
-                    raise ValueError, "Failed to validate field '#{fieldname}' list schema: #{e.message}"
-                  end
-                end
-              else
-                raise ValueError, "Length of list #{value} for field '#{fieldname}' is not equal to length of schema list"
-              end
-            elsif items.kind_of? Hash
-              value.each do |val|
-                begin
-                  _validate(val, items)
-                rescue ValueError => e
-                  raise ValueError, "Failed to validate field '#{fieldname}' list schema: #{e.message}"
-                end
-              end
-            else
-              raise ValueError, "Properties definition of field '#{fieldname}' is not a list or an object"
-            end
-          end
-        end
-      end
-      return x
-    end
-
-    def validate_optional x, fieldname, schema, optional=false
-      if !x.include?(fieldname) && !optional
-        raise ValueError, "Required field '#{fieldname}' is missing"
-      end
-      return x
-    end
-
-    def validate_additionalProperties x, fieldname, schema, additional_properties=nil
-      unless additional_properties.nil?
-        if additional_properties.kind_of? TrueClass
-          return x
-        end
-        value = x[fieldname]
-        if additional_properties.kind_of?(Hash) || additional_properties.kind_of?(FalseClass)
-          properties = schema["properties"]
-          unless properties
-            properties = {}
-          end
-          value.keys.each do |key|
-            unless properties.include? key
-              if additional_properties.kind_of? FalseClass
-                raise ValueError, "Additional properties not defined by 'properties' are not allowed in field '#{fieldname}'"
-              else
-                __validate(key, value, additional_properties)
-              end
-            end
-          end
-        else
-          raise ValueError, "additionalProperties schema definition for field '#{fieldname}' is not an object"
-        end
-      end
-      return x
-    end
-
-    def validate_requires x, fieldname, schema, requires=nil
-      if x[fieldname] && !requires.nil?
-        unless x[requires]
-          raise ValueError, "Field '#{requires}' is required by field '#{fieldname}'"
-        end
-      end
-      return x
-    end
-
-    def validate_identity x, fieldname, schema, unique=false
-      return x
-    end
-
-    def validate_minimum x, fieldname, schema, minimum=nil
-      if !minimum.nil? && x[fieldname]
-        value = x[fieldname]
-        if value
-          if (value.kind_of?(Integer) || value.kind_of?(Float)) && value < minimum
-            raise ValueError, "Value #{value} for field '#{fieldname}' is less than minimum value: #{minimum}"
-          elsif value.kind_of?(Array) && value.size < minimum
-            raise ValueError, "Value #{value} for field '#{fieldname}' has fewer values than the minimum: #{minimum}"
-          end
-        end
-      end
-      return x
-    end
-
-    def validate_maximum x, fieldname, schema, maximum=nil
-      if !maximum.nil? && x[fieldname]
-        value = x[fieldname]
-        if value
-          if (value.kind_of?(Integer) || value.kind_of?(Float)) && value > maximum
-            raise ValueError, "Value #{value} for field '#{fieldname}' is greater than maximum value: #{maximum}"
-          elsif value.kind_of?(Array) && value.size > maximum
-            raise ValueError, "Value #{value} for field '#{fieldname}' has more values than the maximum: #{maximum}"
-          end
-        end
-      end
-      return x
-    end
-
-    def validate_minItems x, fieldname, schema, minitems=nil
-      if !minitems.nil? && x[fieldname]
-        value = x[fieldname]
-        if value
-          if value.kind_of?(Array) && value.size < minitems
-            raise ValueError, "Value #{value} for field '#{fieldname}' must have a minimum of #{minitems} items"
-          end
-        end
-      end
-      return x
-    end
-
-    def validate_maxItems x, fieldname, schema, maxitems=nil
-      if !maxitems.nil? && x[fieldname]
-        value = x[fieldname]
-        if value
-          if value.kind_of?(Array) && value.size > maxitems
-            raise ValueError, "Value #{value} for field '#{fieldname}' must have a maximum of #{maxitems} items"
-          end
-        end
-      end
-      return x
-    end
-
-    def validate_pattern x, fieldname, schema, pattern=nil
-      value = x[fieldname]
-      if !pattern.nil? && value && value.kind_of?(String)
-        p = Regexp.new(pattern)
-        if !p.match(value)
-          raise ValueError, "Value #{value} for field '#{fieldname}' does not match regular expression '#{pattern}'"
-        end
-      end
-      return x
-    end
-
-    def validate_maxLength x, fieldname, schema, length=nil
-      value = x[fieldname]
-      if !length.nil? && value && value.kind_of?(String)
-        # string length => 正規表現で分割して計測
-        if value.split(//).size > length
-          raise ValueError, "Length of value #{value} for field '#{fieldname}' must be less than or equal to #{length}"
-        end
-      end
-      return x
-    end
-
-    def validate_minLength x, fieldname, schema, length=nil
-      value = x[fieldname]
-      if !length.nil? && value && value.kind_of?(String)
-        if value.split(//).size < length
-          raise ValueError, "Length of value #{value} for field '#{fieldname}' must be more than or equal to #{length}"
-        end
-      end
-      return x
-    end
-
-    def validate_enum x, fieldname, schema, options=nil
-      value = x[fieldname]
-      if !options.nil? && value
-        unless options.kind_of? Array
-          raise ValueError, "Enumeration #{options} for field '#{fieldname}' is not a list type"
-        end
-        unless options.include? value
-          raise ValueError, "Value #{value} for field '#{fieldname}' is not in the enumeration: #{options}"
-        end
-      end
-      return x
-    end
-
-    def validate_options x, fieldname, schema, options=nil
-      return x
-    end
-
-    def validate_readonly x, fieldname, schema, readonly=false
-      return x
-    end
-
-    def validate_title x, fieldname, schema, title=nil
-      if !title.nil? && !title.kind_of?(String)
-        raise ValueError, "The title for field '#{fieldname}' must be a string"
-      end
-      return x
-    end
-
-    def validate_description x, fieldname, schema, description=nil
-      if !description.nil? && !description.kind_of?(String)
-        raise ValueError, "The description for field '#{fieldname}' must be a string"
-      end
-      return x
-    end
-
-    def validate_format x, fieldname, schema, format=nil
-      return x
-    end
-
-    def validate_default x, fieldname, schema, default=nil
-      if @interactive && !x.include?(fieldname) && !default.nil?
-        unless schema["readonly"]
-          x[fieldname] = default
-        end
-      end
-      return x
-    end
-
-    def validate_transient x, fieldname, schema, transient=false
-      return x
-    end
-
-    def validate_maxDecimal x, fieldname, schema, maxdecimal=nil
-      value = x[fieldname]
-      if !maxdecimal.nil? && value
-        maxdecstring = value.to_s
-        index = maxdecstring.index('.')
-        if index && maxdecstring[(index+1)...maxdecstring.size].split(//u).size > maxdecimal
-          raise ValueError, "Value #{value} for field '#{fieldname}' must not have more than #{maxdecimal} decimal places"
-        end
-      end
-      return x
-    end
-
-    def validate_hidden x, fieldname, schema, hidden=false
-      return x
-    end
-
-    def validate_disallow x, fieldname, schema, disallow=nil
-      if !disallow.nil?
-        begin
-          validate_type(x, fieldname, schema, disallow)
-        rescue ValueError
-          return x
-        end
-        raise ValueError, "Value #{x[fieldname]} of type #{disallow} is disallowed for field '#{fieldname}'"
-      end
-      return x
-    end
-
-    def validate_extends x, fieldname, schema, extends=nil
-      return x
+    def undefined_check value, key
+      value.fetch(key, Undefined)
     end
 
     def convert_type fieldtype
@@ -395,34 +279,21 @@ module JSON
       end
     end
 
-    def __validate fieldname, data, schema
+    def validate instance, schema
+      @tree = {
+        'self' => instance
+      }
       if schema
-        if !schema.kind_of?(Hash)
-          raise ValueError, "Schema structure is invalid"
-        end
-        # copy
-        new_schema = Marshal.load(Marshal.dump(schema))
-        DefaultSchema.each do |key, val|
-          new_schema[key] = val unless new_schema.include?(key)
-        end
-        new_schema.each do |key ,val|
-          validatorname = "validate_"+key
-          begin
-            __send__(validatorname, data, fieldname, schema, new_schema[key])
-          rescue NoMethodError => e
-            raise ValueError, "Schema property '#{e.message}' is not supported"
-          end
-        end
+        check_property(instance, schema, 'self', @tree)
+      elsif instance && instance['$schema']
+        # self definition schema
+        check_property(instance, instance['$schema'], 'self', @tree)
       end
-      return data
-    end
-
-    def _validate data, schema
-      __validate("_data", {"_data" => data}, schema)
+      return @tree['self']
     end
 
     class << self
-      def validate data, schema, interactive=true
+      def validate data, schema=nil, interactive=true
         validator = JSON::Schema.new(interactive)
         validator.validate(data, schema)
       end

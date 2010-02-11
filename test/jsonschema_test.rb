@@ -1,9 +1,81 @@
 require 'test/unit'
+require 'open-uri'
+require 'pp'
 require File.dirname(__FILE__) + '/../lib/jsonschema'
 
 class JSONSchemaTest < Test::Unit::TestCase
+  def test_chromium
+    require 'json'
+    schema = JSON.parse(open('http://gist.github.com/179669.txt').read)
+    data   = JSON.parse(open('test/manifest.json').read)
+    assert_nothing_raised{
+      JSON::Schema.validate(data, schema)
+    }
+  end
+
+  def test_self_schema
+    data1 =  {
+      "$schema"=> {
+          "properties"=> {
+              "name"=> {
+                  "type"=> "string"
+              },
+              "age" => {
+                  "type"=> "integer",
+                  "maximum"=> 125,
+                  "optional"=> true
+              }
+          }
+      },
+      "name" => "John Doe",
+      "age"  => 30,
+      "type" => "object"
+    }
+    assert_nothing_raised{
+      JSON::Schema.validate(data1)
+    }
+    data2 =  {
+      "$schema"=> {
+          "properties"=> {
+              "name"=> {
+                  "type"=> "integer"
+              },
+              "age" => {
+                  "type"=> "integer",
+                  "maximum"=> 125,
+                  "optional"=> true
+              }
+          }
+      },
+      "name" => "John Doe",
+      "age"  => 30,
+      "type" => "object"
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data2)
+    }
+    data3 =  {
+      "$schema"=> {
+          "properties"=> {
+              "name"=> {
+                  "type"=> "integer"
+              },
+              "age" => {
+                  "type"=> "integer",
+                  "maximum"=> 125,
+                  "optional"=> true
+              }
+          }
+      },
+      "name" => "John Doe",
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data3)
+    }
+  end
+
   def test_maximum
-    schema = {
+    schema1 = {
       "type" => "object",
        "properties" => {
         "prop01" => {
@@ -33,6 +105,91 @@ class JSONSchemaTest < Test::Unit::TestCase
       "prop02"=> 21
     }
     assert_nothing_raised{
+      JSON::Schema.validate(data1, schema1)
+    }
+    assert_nothing_raised{
+      JSON::Schema.validate(data2, schema1)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data3, schema1)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data4, schema1)
+    }
+    schema2 = {
+      "type" => "object",
+       "properties" => {
+        "prop01" => {
+          "type" => "number",
+          "maximum" => 10,
+          "maximumCanEqual" => true
+        },
+        "prop02" => {
+          "type" => "integer",
+          "maximum" => 20,
+          "maximumCanEqual" => false
+        }
+      }
+    }
+    data5 = {
+      "prop01"=> 10,
+      "prop02"=> 10
+    }
+    data6 = {
+      "prop01"=> 10,
+      "prop02"=> 19
+    }
+    data7 = {
+      "prop01"=> 11,
+      "prop02"=> 19
+    }
+    data8 = {
+      "prop01"=> 9,
+      "prop02"=> 20
+    }
+    assert_nothing_raised{
+      JSON::Schema.validate(data5, schema2)
+    }
+    assert_nothing_raised{
+      JSON::Schema.validate(data6, schema2)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data7, schema2)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data8, schema2)
+    }
+  end
+
+  def test_extends
+    schema = {
+      "type" => "object",
+      "properties" => {
+        "prop01" => {
+          "type" => "number",
+          "minimum" => 10
+        },
+        "prop02" => {}
+      }
+    }
+    schema["properties"]["prop02"]["extends"] = schema["properties"]["prop01"]
+    data1 = {
+      "prop01"=> 21,
+      "prop02"=> 21
+    }
+    data2 = {
+      "prop01"=> 10,
+      "prop02"=> 20
+    }
+    data3 = {
+      "prop01"=> 9,
+      "prop02"=> 21
+    }
+    data4 = {
+      "prop01"=> 10,
+      "prop02"=> 9
+    }
+    assert_nothing_raised{
       JSON::Schema.validate(data1, schema)
     }
     assert_nothing_raised{
@@ -47,9 +204,9 @@ class JSONSchemaTest < Test::Unit::TestCase
   end
 
   def test_minimum
-    schema = {
+    schema1 = {
       "type" => "object",
-       "properties" => {
+      "properties" => {
         "prop01" => {
           "type" => "number",
           "minimum" => 10
@@ -77,16 +234,52 @@ class JSONSchemaTest < Test::Unit::TestCase
       "prop02"=> 19
     }
     assert_nothing_raised{
-      JSON::Schema.validate(data1, schema)
+      JSON::Schema.validate(data1, schema1)
     }
     assert_nothing_raised{
-      JSON::Schema.validate(data2, schema)
+      JSON::Schema.validate(data2, schema1)
     }
     assert_raise(JSON::Schema::ValueError){
-      JSON::Schema.validate(data3, schema)
+      JSON::Schema.validate(data3, schema1)
     }
     assert_raise(JSON::Schema::ValueError){
-      JSON::Schema.validate(data4, schema)
+      JSON::Schema.validate(data4, schema1)
+    }
+    schema2 = {
+      "type" => "object",
+      "properties" => {
+        "prop01" => {
+          "type" => "number",
+          "minimum" => 10,
+          "minimumCanEqual" => false
+        },
+        "prop02" => {
+          "type" => "integer",
+          "minimum" => 19,
+          "minimumCanEqual" => true
+        }
+      }
+    }
+    data5 = {
+      "prop01"=> 11,
+      "prop02"=> 19
+    }
+    data6 = {
+      "prop01"=> 10,
+      "prop02"=> 19
+    }
+    data7 = {
+      "prop01"=> 11,
+      "prop02"=> 18
+    }
+    assert_nothing_raised{
+      JSON::Schema.validate(data5, schema2)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data6, schema2)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data7, schema2)
     }
   end
 
@@ -392,8 +585,21 @@ class JSONSchemaTest < Test::Unit::TestCase
     data2 = {
       "prop02"=>"blah"
     }
+    data3 = {
+      "prop01"=>"blah"
+    }
+    data4 = {
+      "prop01"=>"test",
+      "prop03"=>1,
+    }
     assert_raise(JSON::Schema::ValueError){
       JSON::Schema.validate(data2, schema)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data3, schema)
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data4, schema)
     }
   end
 
