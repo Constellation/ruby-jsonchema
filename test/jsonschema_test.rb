@@ -4,15 +4,6 @@ require 'pp'
 require File.dirname(__FILE__) + '/../lib/jsonschema'
 
 class JSONSchemaTest < Test::Unit::TestCase
-  def test_chromium
-    require 'json'
-    schema = JSON.parse(open('http://gist.github.com/179669.txt').read)
-    data   = JSON.parse(open('test/manifest.json').read)
-    assert_nothing_raised{
-      JSON::Schema.validate(data, schema)
-    }
-  end
-
   def test_self_schema
     data1 =  {
       "$schema"=> {
