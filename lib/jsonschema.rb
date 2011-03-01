@@ -2,7 +2,7 @@
 
 module JSON
   class Schema
-    VERSION = '2.0.0'
+    VERSION = '2.0.1'
     class ValueError < Exception;end
     class Undefined;end
     TypesMap = {

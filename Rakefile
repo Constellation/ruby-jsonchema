@@ -9,7 +9,7 @@ require 'rake/rdoctask'
 require 'rake/contrib/rubyforgepublisher'
 require 'rake/contrib/sshpublisher'
 require 'fileutils'
-require 'lib/jsonschema'
+require './lib/jsonschema'
 include FileUtils
 
 $version = JSON::Schema::VERSION
