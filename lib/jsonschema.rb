@@ -222,11 +222,11 @@ module JSON
       end
       value.each {|key, val|
         if key.index('__') != 0 && object_type_def && !object_type_def[key] && additional == false
-          raise ValueError, "#{value.class} The property #{key_path} is not defined in the schema and the schema does not allow additional properties"
+          raise ValueError, "#{value.class} The property #{key} is not defined in the schema and the schema does not allow additional properties"
         end
         requires = object_type_def && object_type_def[key] && object_type_def[key]['requires']
         if requires && !value.include?(requires)
-          raise ValueError, "the presence of the property #{key_path} requires that #{requires} also be present"
+          raise ValueError, "the presence of the property #{key} requires that #{requires} also be present"
         end
         if object_type_def && object_type_def.kind_of?(Hash) && !object_type_def.include?(key)
           check_property(val, additional, key, value)
@@ -252,13 +252,13 @@ module JSON
             end
           end
           unless datavalid
-            raise ValueError, "#{key_path}: #{value.class} value found, but a #{type} is required"
+            raise ValueError, "#{key}: #{value.class} value found, but a #{type} is required"
           end
         elsif converted_fieldtype.kind_of? Hash
           check_property(value, type, key, parent)
         else
           unless value.kind_of? converted_fieldtype
-            raise ValueError, "#{key_path}: #{value.class} value found, but a #{type} is required"
+            raise ValueError, "#{key}: #{value.class} value found, but a #{type} is required"
           end
         end
       end
