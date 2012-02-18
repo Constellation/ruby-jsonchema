@@ -65,15 +65,15 @@ module JSON
           end
 
           unless value.nil?
-            if value.instance_of? Array
+            if value.kind_of? Array
               if schema['items']
-                if schema['items'].instance_of?(Array)
+                if schema['items'].kind_of?(Array)
                   schema['items'].each_with_index {|val, index|
                     check_property(undefined_check(value, index), schema['items'][index], index, value)
                   }
                   if schema.include?('additionalProperties')
                     additional = schema['additionalProperties']
-                    if additional.instance_of?(FalseClass)
+                    if additional.kind_of?(FalseClass)
                       if schema['items'].size < value.size
                         raise ValueError, "#{key}: There are more values in the array than are allowed by the items and additionalProperties restrictions."
                       end
@@ -99,11 +99,11 @@ module JSON
               check_object(value, schema['properties'], schema['additionalProperties'])
             elsif schema.include?('additionalProperties')
               additional = schema['additionalProperties']
-              unless additional.instance_of?(TrueClass)
-                if additional.instance_of?(Hash) || additional.instance_of?(FalseClass)
+              unless additional.kind_of?(TrueClass)
+                if additional.kind_of?(Hash) || additional.kind_of?(FalseClass)
                   properties = {}
                   value.each {|k, val|
-                    if additional.instance_of?(FalseClass)
+                    if additional.kind_of?(FalseClass)
                       raise ValueError, "#{key}: Additional properties not defined by 'properties' are not allowed in field '#{k}'"
                     else
                       check_property(val, schema['additionalProperties'], k, value)
@@ -115,7 +115,7 @@ module JSON
               end
             end
 
-            if value.instance_of?(String)
+            if value.kind_of?(String)
               # pattern
               if schema['pattern'] && !(value =~ Regexp.new(schema['pattern']))
                 raise ValueError, "#{key}: does not match the regex pattern #{schema['pattern']}"
@@ -180,12 +180,12 @@ module JSON
             end
 
             # description
-            if schema['description'] && !schema['description'].instance_of?(String)
+            if schema['description'] && !schema['description'].kind_of?(String)
               raise ValueError, "#{key}: The description for field '#{value}' must be a string"
             end
 
             # title
-            if schema['title'] && !schema['title'].instance_of?(String)
+            if schema['title'] && !schema['title'].kind_of?(String)
               raise ValueError, "#{key}: The title for field '#{value}' must be a string"
             end
 
@@ -199,8 +199,8 @@ module JSON
     end
 
     def check_object value, object_type_def, additional
-      if object_type_def.instance_of? Hash
-        if !value.instance_of?(Hash) || value.instance_of?(Array)
+      if object_type_def.kind_of? Hash
+        if !value.kind_of?(Hash) || value.kind_of?(Array)
           raise ValueError, "an object is required"
         end
 
@@ -218,7 +218,7 @@ module JSON
         if requires && !value.include?(requires)
           raise ValueError, "the presence of the property #{key} requires that #{requires} also be present"
         end
-        if object_type_def && object_type_def.instance_of?(Hash) && !object_type_def.include?(key)
+        if object_type_def && object_type_def.kind_of?(Hash) && !object_type_def.include?(key)
           check_property(val, additional, key, value)
         end
         if !@interactive && val && val['$schema']
@@ -230,7 +230,7 @@ module JSON
     def check_type value, type, key, parent
       converted_fieldtype = convert_type(type)
       if converted_fieldtype
-        if converted_fieldtype.instance_of? Array
+        if converted_fieldtype.kind_of? Array
           datavalid = false
           converted_fieldtype.each do |t|
             begin
@@ -244,10 +244,10 @@ module JSON
           unless datavalid
             raise ValueError, "#{key}: #{value.class} value found, but a #{type} is required"
           end
-        elsif converted_fieldtype.instance_of? Hash
+        elsif converted_fieldtype.kind_of? Hash
           check_property(value, type, key, parent)
         else
-          unless value.instance_of? converted_fieldtype
+          unless value.kind_of? converted_fieldtype
             raise ValueError, "#{key}: #{value.class} value found, but a #{type} is required"
           end
         end
