@@ -20,11 +20,20 @@ module JSON
       @interactive = interactive
       @refmap = {}
     end
-
+    
+    def keys
+      @keys ||= []
+    end
+    
+    def key_path
+      keys.reject{|k| k == 'self'}.join(" > ")
+    end
+    
     def check_property value, schema, key, parent
       if schema
+        keys.push key
 #        if @interactive && schema['readonly']
-#          raise ValueError, "#{key} is a readonly field , it can not be changed"
+#          raise ValueError, "#{key_path} is a readonly field , it can not be changed"
 #        end
 
         if schema['id']
@@ -37,7 +46,7 @@ module JSON
 
         if value == Undefined
           unless schema['optional']
-            raise ValueError, "#{key}: is missing and it is not optional"
+            raise ValueError, "#{key_path}: is missing and it is not optional"
           end
 
           # default
@@ -61,7 +70,7 @@ module JSON
             rescue ValueError
               flag = false
             end
-            raise ValueError, "#{key}: disallowed value was matched" if flag
+            raise ValueError, "#{key_path}: disallowed value was matched" if flag
           end
 
           unless value.nil?
@@ -75,7 +84,7 @@ module JSON
                     additional = schema['additionalProperties']
                     if additional.kind_of?(FalseClass)
                       if schema['items'].size < value.size
-                        raise ValueError, "#{key}: There are more values in the array than are allowed by the items and additionalProperties restrictions."
+                        raise ValueError, "#{key_path}: There are more values in the array than are allowed by the items and additionalProperties restrictions."
                       end
                     else
                       value.each_with_index {|val, index|
@@ -90,10 +99,10 @@ module JSON
                 end
               end
               if schema['minItems'] && value.size < schema['minItems']
-                raise ValueError, "#{key}: There must be a minimum of #{schema['minItems']} in the array"
+                raise ValueError, "#{key_path}: There must be a minimum of #{schema['minItems']} in the array"
               end
               if schema['maxItems'] && value.size > schema['maxItems']
-                raise ValueError, "#{key}: There must be a maximum of #{schema['maxItems']} in the array"
+                raise ValueError, "#{key_path}: There must be a maximum of #{schema['maxItems']} in the array"
               end
             elsif schema['properties']
               check_object(value, schema['properties'], schema['additionalProperties'])
@@ -104,13 +113,13 @@ module JSON
                   properties = {}
                   value.each {|k, val|
                     if additional.kind_of?(FalseClass)
-                      raise ValueError, "#{key}: Additional properties not defined by 'properties' are not allowed in field '#{k}'"
+                      raise ValueError, "#{key_path}: Additional properties not defined by 'properties' are not allowed in field '#{k}'"
                     else
                       check_property(val, schema['additionalProperties'], k, value)
                     end
                   }
                 else
-                  raise ValueError, "#{key}: additionalProperties schema definition for field '#{}' is not an object"
+                  raise ValueError, "#{key_path}: additionalProperties schema definition for field '#{}' is not an object"
                 end
               end
             end
@@ -118,18 +127,18 @@ module JSON
             if value.kind_of?(String)
               # pattern
               if schema['pattern'] && !(value =~ Regexp.new(schema['pattern']))
-                raise ValueError, "#{key}: does not match the regex pattern #{schema['pattern']}"
+                raise ValueError, "#{key_path}: does not match the regex pattern #{schema['pattern']}"
               end
 
               strlen = value.split(//).size
               # maxLength
               if schema['maxLength'] && strlen > schema['maxLength']
-                raise ValueError, "#{key}: may only be #{schema['maxLength']} characters long"
+                raise ValueError, "#{key_path}: may only be #{schema['maxLength']} characters long"
               end
 
               # minLength
               if schema['minLength'] && strlen < schema['minLength']
-                raise ValueError, "#{key}: must be at least #{schema['minLength']} characters long"
+                raise ValueError, "#{key_path}: must be at least #{schema['minLength']} characters long"
               end
             end
 
@@ -140,11 +149,11 @@ module JSON
                 minimumCanEqual = schema.fetch('minimumCanEqual', Undefined)
                 if minimumCanEqual == Undefined || minimumCanEqual
                   if value < schema['minimum']
-                    raise ValueError, "#{key}: must have a minimum value of #{schema['minimum']}"
+                    raise ValueError, "#{key_path}: must have a minimum value of #{schema['minimum']}"
                   end
                 else
                   if value <= schema['minimum']
-                    raise ValueError, "#{key}: must have a minimum value of #{schema['minimum']}"
+                    raise ValueError, "#{key_path}: must have a minimum value of #{schema['minimum']}"
                   end
                 end
               end
@@ -154,11 +163,11 @@ module JSON
                 maximumCanEqual = schema.fetch('maximumCanEqual', Undefined)
                 if maximumCanEqual == Undefined || maximumCanEqual
                   if value > schema['maximum']
-                    raise ValueError, "#{key}: must have a maximum value of #{schema['maximum']}"
+                    raise ValueError, "#{key_path}: must have a maximum value of #{schema['maximum']}"
                   end
                 else
                   if value >= schema['maximum']
-                    raise ValueError, "#{key}: must have a maximum value of #{schema['maximum']}"
+                    raise ValueError, "#{key_path}: must have a maximum value of #{schema['maximum']}"
                   end
                 end
               end
@@ -166,7 +175,7 @@ module JSON
               # maxDecimal
               if schema['maxDecimal'] && schema['maxDecimal'].kind_of?(Numeric)
                 if value.to_s =~ /\.\d{#{schema['maxDecimal']+1},}/
-                  raise ValueError, "#{key}: may only have #{schema['maxDecimal']} digits of decimal places"
+                  raise ValueError, "#{key_path}: may only have #{schema['maxDecimal']} digits of decimal places"
                 end
               end
 
@@ -175,18 +184,18 @@ module JSON
             # enum
             if schema['enum']
               unless(schema['enum'].detect{|enum| enum == value })
-                raise ValueError, "#{key}: does not have a value in the enumeration #{schema['enum'].join(", ")}"
+                raise ValueError, "#{key_path}: does not have a value in the enumeration #{schema['enum'].join(", ")}"
               end
             end
 
             # description
             if schema['description'] && !schema['description'].kind_of?(String)
-              raise ValueError, "#{key}: The description for field '#{value}' must be a string"
+              raise ValueError, "#{key_path}: The description for field '#{value}' must be a string"
             end
 
             # title
             if schema['title'] && !schema['title'].kind_of?(String)
-              raise ValueError, "#{key}: The title for field '#{value}' must be a string"
+              raise ValueError, "#{key_path}: The title for field '#{value}' must be a string"
             end
 
             # format
@@ -195,6 +204,7 @@ module JSON
 
           end
         end
+        keys.pop
       end
     end
 
@@ -212,11 +222,11 @@ module JSON
       end
       value.each {|key, val|
         if key.index('__') != 0 && object_type_def && !object_type_def[key] && additional == false
-          raise ValueError, "#{value.class} The property #{key} is not defined in the schema and the schema does not allow additional properties"
+          raise ValueError, "The property #{key_path} > #{key} is not defined in the schema and the schema does not allow additional properties"
         end
         requires = object_type_def && object_type_def[key] && object_type_def[key]['requires']
         if requires && !value.include?(requires)
-          raise ValueError, "the presence of the property #{key} requires that #{requires} also be present"
+          raise ValueError, "The presence of the property #{key_path} > #{key} requires that #{requires} also be present"
         end
         if object_type_def && object_type_def.kind_of?(Hash) && !object_type_def.include?(key)
           check_property(val, additional, key, value)
@@ -242,13 +252,13 @@ module JSON
             end
           end
           unless datavalid
-            raise ValueError, "#{key}: #{value.class} value found, but a #{type} is required"
+            raise ValueError, "#{key_path}: #{value.class} value found, but a #{type} is required"
           end
         elsif converted_fieldtype.kind_of? Hash
           check_property(value, type, key, parent)
         else
           unless value.kind_of? converted_fieldtype
-            raise ValueError, "#{key}: #{value.class} value found, but a #{type} is required"
+            raise ValueError, "#{key_path}: #{value.class} value found, but a #{type} is required"
           end
         end
       end
