@@ -2,7 +2,7 @@
 
 module JSON
   class Schema
-    VERSION = '2.0.1'
+    VERSION = '2.0.2'
     class ValueError < Exception;end
     class Undefined;end
     TypesMap = {
@@ -20,15 +20,15 @@ module JSON
       @interactive = interactive
       @refmap = {}
     end
-    
+
     def keys
       @keys ||= []
     end
-    
+
     def key_path
       keys.reject{|k| k == 'self'}.join(" > ")
     end
-    
+
     def check_property value, schema, key, parent
       if schema
         keys.push key

@@ -41,6 +41,11 @@ if you have json library
   gem source -a http://gemcutter.org
   sudo gem install jsonschema
 
+== CONTRIBUTORS:
+
+* Matt Coneybeare
+* hristian Bäuerlein
+
 == LICENSE:
 
 Ruby/jsonschema

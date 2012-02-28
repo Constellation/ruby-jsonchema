@@ -3,9 +3,8 @@ require 'rubygems'
 require 'rake'
 require 'rake/clean'
 require 'rake/testtask'
-require 'rake/packagetask'
-require 'rake/gempackagetask'
-require 'rake/rdoctask'
+require 'rubygems/package_task'
+require 'rake/task'
 require 'rake/contrib/rubyforgepublisher'
 require 'rake/contrib/sshpublisher'
 require 'fileutils'
@@ -58,16 +57,9 @@ spec = Gem::Specification.new do |s|
   s.files = %w(README.rdoc Rakefile) + Dir["{bin,test,lib}/**/*"]
 end
 
-Rake::GemPackageTask.new(spec) do |p|
+Gem::PackageTask.new(spec) do |p|
   p.need_tar = true
   p.gem_spec = spec
-end
-
-Rake::RDocTask.new do |rdoc|
-  rdoc.rdoc_dir = 'doc'
-  rdoc.options += $rdoc_opts
-#  rdoc.template = 'resh'
-  rdoc.rdoc_files.include("README.rdoc", "lib/**/*.rb", "ext/**/*.c")
 end
 
 desc "gem spec"
