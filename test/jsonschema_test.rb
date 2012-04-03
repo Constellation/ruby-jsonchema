@@ -14,7 +14,6 @@ class JSONSchemaTest < Test::Unit::TestCase
               "age" => {
                   "type"=> "integer",
                   "maximum"=> 125,
-                  "optional"=> true
               }
           }
       },
@@ -34,7 +33,6 @@ class JSONSchemaTest < Test::Unit::TestCase
               "age" => {
                   "type"=> "integer",
                   "maximum"=> 125,
-                  "optional"=> true
               }
           }
       },
@@ -54,7 +52,6 @@ class JSONSchemaTest < Test::Unit::TestCase
               "age" => {
                   "type"=> "integer",
                   "maximum"=> 125,
-                  "optional"=> true
               }
           }
       },
@@ -421,7 +418,7 @@ class JSONSchemaTest < Test::Unit::TestCase
         },
         "prop02"=>{
           "type"=>"number",
-          "optional"=>true
+          "required"=>false
         },
         "prop03"=>{
           "type"=>"integer",
@@ -431,14 +428,14 @@ class JSONSchemaTest < Test::Unit::TestCase
         },
         "prop05"=>{
           "type"=>"object",
-          "optional"=>true,
+          "required"=>false,
           "properties"=>{
             "subprop01"=>{
               "type"=>"string",
             },
             "subprop02"=>{
               "type"=>"string",
-              "optional"=>false
+              "required"=>true
             }
           }
         }
@@ -499,11 +496,9 @@ class JSONSchemaTest < Test::Unit::TestCase
       "properties"=>{
         "prop01"=>{
           "type"=>"string",
-          "optional"=>true
         },
         "prop02"=>{
           "type"=>"number",
-          "optional"=>true,
           "requires"=>"prop01"
         }
       }
@@ -545,7 +540,7 @@ class JSONSchemaTest < Test::Unit::TestCase
     }
   end
 
-  def test_optional
+  def test_required
     schema = {
       "type"=>"object",
       "properties"=>{
@@ -554,14 +549,14 @@ class JSONSchemaTest < Test::Unit::TestCase
         },
         "prop02"=>{
           "type"=>"number",
-          "optional"=>true
+          "required"=>false
         },
         "prop03"=>{
           "type"=>"integer"
         },
         "prop04"=>{
           "type"=>"boolean",
-          "optional"=>false
+          "required"=>true
         }
       }
     }
@@ -598,7 +593,6 @@ class JSONSchemaTest < Test::Unit::TestCase
     schema1 = {
       "properties"=>{
         "test"=>{
-          "optional"=>true,
           "default"=>10
         },
       }
@@ -606,7 +600,6 @@ class JSONSchemaTest < Test::Unit::TestCase
     schema2 = {
       "properties"=>{
         "test"=>{
-          "optional"=>true,
           "default"=>10,
           "readonly"=>true
         }
