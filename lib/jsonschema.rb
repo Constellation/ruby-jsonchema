@@ -45,8 +45,8 @@ module JSON
         end
 
         if value == Undefined
-          unless schema['optional']
-            raise ValueError, "#{key_path}: is missing and it is not optional"
+          if schema['required']
+            raise ValueError, "#{key_path}: is missing and it is required"
           end
 
           # default
@@ -78,7 +78,7 @@ module JSON
               if schema['items']
                 if schema['items'].kind_of?(Array)
                   schema['items'].each_with_index {|val, index|
-                    check_property(undefined_check(value, index), schema['items'][index], index, value)
+                    check_property(undefined_check(value, index), schema['items'][index].merge("required" => true), index, value)
                   }
                   if schema.include?('additionalProperties')
                     additional = schema['additionalProperties']
