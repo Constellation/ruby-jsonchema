@@ -892,6 +892,39 @@ class JSONSchemaTest < Test::Unit::TestCase
     end
   end
 
+  def test_patternProperties
+    schema1 = {
+      "patternProperties" => {
+        "^i.*$" => {
+          "type" => "integer"
+        },
+        "^s.*$" => {
+          "type" => "string"
+        },
+        "^b.*$" => {
+          "type" => "boolean"
+        }
+      }
+    }
+    data1 = {
+      "iabc" => 123,
+      "s456" => "val",
+      "another" => { "hash" => 1234 }
+    }
+    assert_nothing_raised{
+      JSON::Schema.validate(data1, schema1)
+    }
+    data2 = {
+      "iabc" => 123,
+      "s456" => "val",
+      "another" => { "hash" => 1234 },
+      "b567" => "string_instead_of_boolean"
+    }
+    assert_raise(JSON::Schema::ValueError){
+      JSON::Schema.validate(data2, schema1)
+    }
+  end
+
   def test_disallow
     # multi phase
     schema = {"disallow"=>["null","integer","string"]}

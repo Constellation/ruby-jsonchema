@@ -106,6 +106,14 @@ module JSON
               end
             elsif schema['properties']
               check_object(value, schema['properties'], schema['additionalProperties'])
+            elsif schema['patternProperties']
+              value.each { |k, val|
+                schema['patternProperties'].each { |pattern_string, pattern_schema|
+                  if k =~ Regexp.new(pattern_string)
+                    check_property(val, schema['patternProperties'][pattern_string], k, value)
+                  end
+                }
+              }
             elsif schema.include?('additionalProperties')
               additional = schema['additionalProperties']
               unless additional.kind_of?(TrueClass)
